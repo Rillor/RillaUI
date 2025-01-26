@@ -1,0 +1,13 @@
+## Interface: 100105
+## Title: RillaUI
+## Notes: Rilla's Toolbox
+## Author: Rilla
+## Version: 1.0
+## Dependencies: NorthernSkyMedia
+## SavedVariables:
+RillaUI.lua
+NSNickNamesElvUI.lua
+NSNickNamesCell.lua
+NSNickNamesGrid2.lua
+Bindings.lua
+BossGroupManager.lua

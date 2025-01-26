@@ -1,0 +1,13 @@
+<Bindings>
+    <Binding name="RILLAUIHIDEBARS" header="RillaUI" category="RillaUI">
+        local function t(n) Bartender4.Bar.barregistry[n]:SetVisibilityOption("always",not Bartender4.Bar.barregistry[n]:GetVisibilityOption("always")) end t("1") t("2") t("3") t("5") t("4") t("6")
+    </Binding>
+
+    <Binding name="RILLAUILEAVEPARTY" category="RillaUI">
+        C_PartyInfo.LeaveParty()
+    </Binding>
+    <Binding name="CHECKUSERVERSION" category="RillaUI">
+    WeakAuras.ScanEvents("OCTOPALS_START_QUERY")
+    </Binding>
+</Bindings>
+
