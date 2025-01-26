@@ -4,7 +4,7 @@
 ## Author: Rilla
 ## Version: 1.0
 ## Dependencies: NorthernSkyMedia
-## SavedVariables:
+## SavedVariables: BossGroupManagerSaved
 RillaUI.lua
 NSNickNamesElvUI.lua
 NSNickNamesCell.lua

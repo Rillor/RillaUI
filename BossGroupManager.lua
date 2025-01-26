@@ -2,6 +2,23 @@ local BossGroupManager = CreateFrame("Frame", "BossGroupManagerFrame", UIParent)
 local playersByBoss = {}
 local bosses = {"Ulgrax", "Horror", "Sikran", "Rasha'nan", "Ovi'nax", "Ky'veza", "Court", "Ansurek"}
 
+-- Initialize saved variables
+BossGroupManager:SetScript("OnEvent", function(self, event, addonName)
+    if event == "ADDON_LOADED" and addonName == "RillaUI" then
+        if BossGroupManagerSaved == nil then
+            BossGroupManagerSaved = {}
+        end
+        playersByBoss = BossGroupManagerSaved.playersByBoss or {}
+        UpdateBossButtons()
+    elseif event == "PLAYER_LOGOUT" then
+        BossGroupManagerSaved.playersByBoss = playersByBoss
+    end
+end)
+BossGroupManager:RegisterEvent("ADDON_LOADED")
+BossGroupManager:RegisterEvent("PLAYER_LOGOUT")
+
+
+
 -- Function to assign players to groups
 local function AssignPlayersToGroups(boss)
     if not playersByBoss[boss] then
@@ -10,8 +27,6 @@ local function AssignPlayersToGroups(boss)
     end
 
     local players = playersByBoss[boss]
-    local group = 1
-    local playerIndex = 1
     local maxGroupMembers = 5
 
     local raidMembers = {}
@@ -31,58 +46,58 @@ local function AssignPlayersToGroups(boss)
         print("Raid member:", unitName, "Group:", subgroup)
     end
 
-    -- Assign players to groups 1-4
+    -- Reassign players who are in the wrong group
     for _, player in ipairs(players) do
         player = player:match("^%s*(.-)%s*$") -- Trim spaces
         print("Assigning player:", player)
 
-        if group > 4 then
-            print("Warning: More than 20 players, not assigning:", player)
-            return
-        end
-
         if raidMembers[player] then
             local currentGroup = raidMembers[player].group
-            if currentGroup ~= group then
-                if groupCounts[group] < maxGroupMembers then
-                    SetRaidSubgroup(raidMembers[player].index, group)
-                    print("Assigned", player, "to group", group)
-                    assignedPlayers[player] = true -- Mark player as assigned
-                    groupCounts[group] = groupCounts[group] + 1
-                    groupCounts[currentGroup] = groupCounts[currentGroup] - 1
+            if currentGroup > 4 or currentGroup == nil then
+                local newGroup = 1
+                while groupCounts[newGroup] >= maxGroupMembers and newGroup <= 4 do
+                    newGroup = newGroup + 1
+                end
+
+                if newGroup > 4 then
+                    print("Warning: All groups 1-4 are full, moving", player, "to group 5-8 later")
                 else
-                    print("Group", group, "is full, cannot assign", player)
+                    SetRaidSubgroup(raidMembers[player].index, newGroup)
+                    print("Assigned", player, "to group", newGroup)
+                    assignedPlayers[player] = true -- Mark player as assigned
+                    groupCounts[newGroup] = groupCounts[newGroup] + 1
+                    groupCounts[currentGroup] = groupCounts[currentGroup] - 1
                 end
             else
-                print(player, "is already in the correct group", group)
+                print(player, "is already in the correct group", currentGroup)
                 assignedPlayers[player] = true -- Mark player as assigned
             end
         else
             print("Player not found in raid:", player)
         end
-
-        if groupCounts[group] >= maxGroupMembers then
-            group = group + 1
-        end
-        playerIndex = playerIndex + 1
     end
 
-    -- Assign remaining players to groups 5-8
+    -- Move unassigned players out of groups 1-4 and keep them in groups 5-8
     local unassignedGroup = 5
     for unitName, data in pairs(raidMembers) do
         if not assignedPlayers[unitName] then
-            while groupCounts[unassignedGroup] >= maxGroupMembers and unassignedGroup <= 8 do
-                unassignedGroup = unassignedGroup + 1
-            end
+            if data.group <= 4 then
+                while groupCounts[unassignedGroup] >= maxGroupMembers and unassignedGroup <= 8 do
+                    unassignedGroup = unassignedGroup + 1
+                end
 
-            if unassignedGroup > 8 then
-                print("Warning: More than 40 players, not assigning:", unitName)
-                return
-            end
+                if unassignedGroup > 8 then
+                    print("Warning: More than 40 players, not assigning:", unitName)
+                    return
+                end
 
-            SetRaidSubgroup(data.index, unassignedGroup)
-            print("Assigned unlisted player", unitName, "to group", unassignedGroup)
-            groupCounts[unassignedGroup] = groupCounts[unassignedGroup] + 1
+                SetRaidSubgroup(data.index, unassignedGroup)
+                print("Moved unassigned player", unitName, "from group", data.group, "to group", unassignedGroup)
+                groupCounts[unassignedGroup] = groupCounts[unassignedGroup] + 1
+                groupCounts[data.group] = groupCounts[data.group] - 1
+            else
+                print("Unassigned player", unitName, "remains in group", data.group)
+            end
         end
     end
 end
@@ -142,6 +157,7 @@ local function ImportPlayers(input)
         playerList[i] = player:match("^%s*(.-)%s*$") -- Trim spaces from player names
     end
     playersByBoss[boss] = playerList
+    BossGroupManagerSaved.playersByBoss = playersByBoss -- Update saved variable
 
     print("Imported players for boss:", boss)
     UpdateBossButtons()
@@ -151,6 +167,7 @@ end
 local function DeleteBoss(boss)
     if playersByBoss[boss] then
         playersByBoss[boss] = nil
+        BossGroupManagerSaved.playersByBoss = playersByBoss -- Update saved variable
         print("Deleted boss:", boss)
         UpdateBossButtons()
     else
@@ -158,7 +175,7 @@ local function DeleteBoss(boss)
     end
 end
 
--- Slash command handling
+-- Slash command handling (same as before, no changes needed)
 SLASH_BGM1 = "/bgm"
 SlashCmdList["BGM"] = function(input)
     if not input or input == "" then
@@ -176,7 +193,7 @@ SlashCmdList["BGM"] = function(input)
     end
 end
 
--- Toggle visibility of Boss Group Manager window
+-- Toggle visibility of Boss Group Manager window (same as before, no changes needed)
 SLASH_BGMT1 = "/bgmtoggle"
 SlashCmdList["BGMT"] = function()
     if BossGroupManager:IsShown() then
@@ -186,36 +203,76 @@ SlashCmdList["BGMT"] = function()
     end
 end
 
--- Initialize Frame
-BossGroupManager:SetSize(150, 70) -- Width and minimum height
-BossGroupManager:SetPoint("CENTER")
-
--- Add background texture with 30% opacity
-local bgTexture = BossGroupManager:CreateTexture(nil, "BACKGROUND")
-bgTexture:SetAllPoints(true)
-bgTexture:SetColorTexture(0, 0, 0, 0.3) -- Black background with 30% opacity
-
--- Add a black border
-local border = CreateFrame("Frame", nil, BossGroupManager, "BackdropTemplate")
-border:SetAllPoints(true)
-border:SetBackdrop({
+-- Create a container frame for the entire UI
+local containerFrame = CreateFrame("Frame", "BossGroupManagerContainer", UIParent, "BackdropTemplate")
+containerFrame:SetSize(160, 70) -- Initial size (will be adjusted dynamically)
+containerFrame:SetPoint("CENTER")
+containerFrame:SetBackdrop({
+    bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
     edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-    edgeSize = 12,
+    edgeSize = 16,
+    insets = {left = 4, right = 4, top = 4, bottom = 4},
 })
-border:SetBackdropBorderColor(0, 0, 0)
+containerFrame:SetBackdropColor(0, 0, 0, 0.3) -- Black background with 30% opacity
+containerFrame:SetBackdropBorderColor(0, 0, 0) -- Black border
 
--- Enable dragging
-BossGroupManager:EnableMouse(true)
-BossGroupManager:SetMovable(true)
-BossGroupManager:RegisterForDrag("LeftButton")
-BossGroupManager:SetScript("OnDragStart", BossGroupManager.StartMoving)
-BossGroupManager:SetScript("OnDragStop", BossGroupManager.StopMovingOrSizing)
+-- Create the main frame inside the container
+local BossGroupManager = CreateFrame("Frame", "BossGroupManagerFrame", containerFrame)
+BossGroupManager:SetSize(150, 70) -- Initial size (will be adjusted dynamically)
+BossGroupManager:SetPoint("TOPLEFT", containerFrame, "TOPLEFT", 5, -5) -- Adjust position for border
 
--- Title
-local title = BossGroupManager:CreateFontString("BossGroupManagerTitle", "OVERLAY", "GameFontNormalLarge")
+-- Enable dragging for the container frame
+containerFrame:EnableMouse(true)
+containerFrame:SetMovable(true)
+containerFrame:RegisterForDrag("LeftButton")
+containerFrame:SetScript("OnDragStart", containerFrame.StartMoving)
+containerFrame:SetScript("OnDragStop", containerFrame.StopMovingOrSizing)
+
+-- Title for the main frame
+local title = BossGroupManager:CreateFontString("BossGroupManagerTitle", "OVERLAY", "GameFontNormal")
 title:SetPoint("TOP", 0, -10)
-title:SetText("|cFFFFFFFFBoss Group Manager|r")
-title:SetFont("Fonts\\FRIZQT__.TTF", 14) -- Set font size to 14
+title:SetText("|cFFFFFFFFSetup Manager|r")
+title:SetFont("Fonts\\FRIZQT__.TTF", 16) -- Set font size to 14, no outline
 
--- Create Boss Buttons initially
+-- Function to update boss buttons
+local function UpdateBossButtons()
+    for _, child in ipairs({BossGroupManager:GetChildren()}) do
+        if child:GetName() ~= "BossGroupManagerTitle" then
+            child:Hide() -- Hide old buttons
+        end
+    end
+
+    local buttonWidth = 120
+    local buttonHeight = 30
+    local xOffset = (BossGroupManager:GetWidth() - buttonWidth) / 2 -- Center the buttons
+    local yOffset = -40 -- Start below the title
+    local index = 0
+
+    for _, boss in ipairs(bosses) do
+        local button = CreateFrame("Button", "BossButton" .. index, BossGroupManager, "UIPanelButtonTemplate")
+        button:SetSize(buttonWidth, buttonHeight)
+        button:SetText(boss)
+        button:SetPoint("TOPLEFT", xOffset, yOffset + (-1 * (buttonHeight + 5) * index)) -- Adjust vertical spacing
+        button:SetNormalFontObject("GameFontHighlight")
+        button:SetScript("OnClick", function()
+            AssignPlayersToGroups(boss)
+        end)
+        button:Show()
+        index = index + 1
+    end
+
+    -- Adjust the main frame's height dynamically based on the number of buttons
+    local baseHeight = 40 -- Reduced base height to minimize excess space
+    local totalHeight = baseHeight + (buttonHeight + 5) * index
+    BossGroupManager:SetHeight(totalHeight)
+
+    -- Adjust the container frame's height to include the border
+    containerFrame:SetHeight(totalHeight + 20) -- Add extra space for border
+end
+
+-- Ensure UpdateBossButtons is called to initialize the buttons
 UpdateBossButtons()
+
+
+
+
