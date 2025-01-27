@@ -1,10 +1,12 @@
 ## Interface: 100105
 ## Title: RillaUI
-## Notes: Rilla's Toolbox
-## Author: Rilla
-## Version: 1.0
+## Notes: Constant Tools
+## Author: Rilla-Blackrock
+## Version: 0.0.1
+## IconTexture: Interface\Addons\RillaUI\constantLogo.tga
 ## Dependencies: NorthernSkyMedia
-## SavedVariables: BossGroupManagerSaved
+## OptionalDependencies: Ace3, LibRealmInfo, LibDBIcon, LibDataBroker-1.1
+## SavedVariables: BossGroupManagerSaved, RillaUIDB
 RillaUI.lua
 NSNickNamesElvUI.lua
 NSNickNamesCell.lua

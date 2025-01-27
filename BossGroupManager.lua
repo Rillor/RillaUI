@@ -1,28 +1,110 @@
-local BossGroupManager = CreateFrame("Frame", "BossGroupManagerFrame", UIParent)
-local playersByBoss = {}
-local bosses = {"Ulgrax", "Horror", "Sikran", "Rasha'nan", "Ovi'nax", "Ky'veza", "Court", "Ansurek"}
+-- Define the bosses table
+local bosses = { "Ulgrax", "Horror", "Sikran", "Rasha'nan", "Ovi'nax", "Ky'veza", "Court", "Ansurek" }
 
--- Initialize saved variables
-BossGroupManager:SetScript("OnEvent", function(self, event, addonName)
-    if event == "ADDON_LOADED" and addonName == "RillaUI" then
-        if BossGroupManagerSaved == nil then
-            BossGroupManagerSaved = {}
-        end
-        playersByBoss = BossGroupManagerSaved.playersByBoss or {}
-        UpdateBossButtons()
-    elseif event == "PLAYER_LOGOUT" then
-        BossGroupManagerSaved.playersByBoss = playersByBoss
+-- Initialize playersByBoss
+if not playersByBoss then
+    playersByBoss = {}
+end
+
+-- Create a container frame for the entire UI
+local containerFrame = CreateFrame("Frame", "BossGroupManagerContainer", UIParent, "BackdropTemplate")
+containerFrame:SetSize(220, 350) -- Adjusted size for better fit
+containerFrame:SetPoint("CENTER")
+containerFrame:SetBackdrop({
+    bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
+    edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+    edgeSize = 16,
+    insets = {left = 4, right = 4, top = 4, bottom = 4},
+})
+containerFrame:SetBackdropColor(0, 0, 0, 0.8) -- Black background with 30% opacity
+containerFrame:SetBackdropBorderColor(0, 0, 0) -- Black border
+
+-- Enable dragging for the container frame
+containerFrame:EnableMouse(true)
+containerFrame:SetMovable(true)
+containerFrame:RegisterForDrag("LeftButton")
+containerFrame:SetScript("OnDragStart", containerFrame.StartMoving)
+containerFrame:SetScript("OnDragStop", containerFrame.StopMovingOrSizing)
+
+-- Create the main frame inside the container
+local BossGroupManager = CreateFrame("Frame", "BossGroupManagerFrame", containerFrame)
+BossGroupManager:SetSize(260, 330) -- Adjusted size for the new layout
+BossGroupManager:SetPoint("TOPLEFT", containerFrame, "TOPLEFT", 10, -10) -- Adjust position for border
+
+-- Create the main frame inside the container
+local BossGroupManager = CreateFrame("Frame", "BossGroupManagerFrame", containerFrame)
+BossGroupManager:SetSize(260, 330) -- Adjusted size for the new layout
+BossGroupManager:SetPoint("TOPLEFT", containerFrame, "TOPLEFT", 10, -10) -- Adjust position for border
+
+-- Container for the title and icon
+local titleContainer = CreateFrame("Frame", nil, BossGroupManager)
+titleContainer:SetSize(200, 40) -- Adjust size as needed
+titleContainer:SetPoint("TOP", BossGroupManager, "TOP", 0, 0) -- Center the container and adjust position
+
+-- Icon to the left of the title
+local titleIcon = titleContainer:CreateTexture(nil, "OVERLAY")
+titleIcon:SetSize(32, 32) -- Adjust size as needed
+titleIcon:SetTexture("Interface\\AddOns\\RillaUI\\constantLogo.tga") -- Adjust path as needed
+titleIcon:SetPoint("LEFT")
+
+-- Title for the main frame
+local title = titleContainer:CreateFontString("BossGroupManagerTitle", "OVERLAY", "GameFontNormal")
+title:SetPoint("LEFT", titleIcon, "RIGHT", 5, 0) -- Position title to the right of the icon
+title:SetText("|cFFFFFFFFSetup Manager|r")
+title:SetFont("Fonts\\FRIZQT__.TTF", 16) -- Set font size to 14, no outline
+
+local function customPrint(message,type)
+    if type == "err" then
+        print("|cffee5555" .. message .. "|r")
+        elseif type == "success" then
+        print("|cff55ee55" .. message .. "|r")
     end
-end)
-BossGroupManager:RegisterEvent("ADDON_LOADED")
-BossGroupManager:RegisterEvent("PLAYER_LOGOUT")
+end
 
+-- Helper function: Get class color
+local function GetClassColor(player)
+    for i = 1, GetNumGroupMembers() do
+        local unitName, _, _, _, classFileName = GetRaidRosterInfo(i)
+        if unitName == player then
+            local color = RAID_CLASS_COLORS[classFileName]
+            return format("|cff%02x%02x%02x%s|r", color.r * 255, color.g * 255, color.b * 255, player)
+        end
+    end
+    return player -- Default to white if not found
+end
 
+-- Function to print players missing from a specific boss setup
+local function PrintMissingPlayers(boss)
+    if not playersByBoss[boss] then
+        return
+    end
+
+    local missingPlayers = {}
+    for _, player in ipairs(playersByBoss[boss]) do
+        player = player:match("^%s*(.-)%s*$") -- Trim spaces
+        local found = false
+        for i = 1, GetNumGroupMembers() do
+            local unitName = GetRaidRosterInfo(i)
+            if unitName == player then
+                found = true
+                break
+            end
+        end
+        if not found then
+            table.insert(missingPlayers, GetClassColor(player))
+        end
+    end
+    if #missingPlayers > 0 then
+        customPrint("\nPlayers missing from" .. boss .. "setup:|r\n" .. table.concat(missingPlayers, ", "), "err")
+    else
+        customPrint("All players are present for " .. boss .. " setup.|r", "success")
+    end
+end
 
 -- Function to assign players to groups
 local function AssignPlayersToGroups(boss)
     if not playersByBoss[boss] then
-        print("No players found for boss:", boss)
+        customPrint("No Setup for " .. boss, "err")
         return
     end
 
@@ -30,6 +112,7 @@ local function AssignPlayersToGroups(boss)
     local maxGroupMembers = 5
 
     local raidMembers = {}
+    local unassignedPlayers = {}
     local assignedPlayers = {}
     local groupCounts = {}
 
@@ -40,66 +123,49 @@ local function AssignPlayersToGroups(boss)
 
     -- Gather raid members and their current groups
     for i = 1, GetNumGroupMembers() do
-        local unitName, rank, subgroup = GetRaidRosterInfo(i)
-        raidMembers[unitName] = {index = i, group = subgroup}
-        groupCounts[subgroup] = groupCounts[subgroup] + 1
-        print("Raid member:", unitName, "Group:", subgroup)
+        local unitName, _, subgroup = GetRaidRosterInfo(i) -- Corrected parameter position
+        if subgroup and type(subgroup) == "number" then
+            raidMembers[unitName] = { index = i, group = subgroup }
+            groupCounts[subgroup] = groupCounts[subgroup] + 1
+            if tContains(players, unitName) then
+                assignedPlayers[unitName] = i
+            else
+                unassignedPlayers[unitName] = i
+            end
+        end
     end
 
-    -- Reassign players who are in the wrong group
-    for _, player in ipairs(players) do
-        player = player:match("^%s*(.-)%s*$") -- Trim spaces
-        print("Assigning player:", player)
-
-        if raidMembers[player] then
-            local currentGroup = raidMembers[player].group
-            if currentGroup > 4 or currentGroup == nil then
-                local newGroup = 1
-                while groupCounts[newGroup] >= maxGroupMembers and newGroup <= 4 do
-                    newGroup = newGroup + 1
-                end
-
-                if newGroup > 4 then
-                    print("Warning: All groups 1-4 are full, moving", player, "to group 5-8 later")
-                else
-                    SetRaidSubgroup(raidMembers[player].index, newGroup)
-                    print("Assigned", player, "to group", newGroup)
-                    assignedPlayers[player] = true -- Mark player as assigned
+    -- Move unassigned players out of groups 1-4 to groups 5-8
+    for unitName, index in pairs(unassignedPlayers) do
+        local currentGroup = raidMembers[unitName].group
+        if currentGroup <= 4 then
+            for newGroup = 5, 8 do
+                if groupCounts[newGroup] < maxGroupMembers then
+                    SetRaidSubgroup(index, newGroup)
                     groupCounts[newGroup] = groupCounts[newGroup] + 1
                     groupCounts[currentGroup] = groupCounts[currentGroup] - 1
+                    break
                 end
-            else
-                print(player, "is already in the correct group", currentGroup)
-                assignedPlayers[player] = true -- Mark player as assigned
-            end
-        else
-            print("Player not found in raid:", player)
-        end
-    end
-
-    -- Move unassigned players out of groups 1-4 and keep them in groups 5-8
-    local unassignedGroup = 5
-    for unitName, data in pairs(raidMembers) do
-        if not assignedPlayers[unitName] then
-            if data.group <= 4 then
-                while groupCounts[unassignedGroup] >= maxGroupMembers and unassignedGroup <= 8 do
-                    unassignedGroup = unassignedGroup + 1
-                end
-
-                if unassignedGroup > 8 then
-                    print("Warning: More than 40 players, not assigning:", unitName)
-                    return
-                end
-
-                SetRaidSubgroup(data.index, unassignedGroup)
-                print("Moved unassigned player", unitName, "from group", data.group, "to group", unassignedGroup)
-                groupCounts[unassignedGroup] = groupCounts[unassignedGroup] + 1
-                groupCounts[data.group] = groupCounts[data.group] - 1
-            else
-                print("Unassigned player", unitName, "remains in group", data.group)
             end
         end
     end
+
+    -- Move assigned players to groups 1-4
+    for unitName, index in pairs(assignedPlayers) do
+        local currentGroup = raidMembers[unitName].group
+        if currentGroup > 4 then
+            for newGroup = 1, 4 do
+                if groupCounts[newGroup] < maxGroupMembers then
+                    SetRaidSubgroup(index, newGroup)
+                    groupCounts[newGroup] = groupCounts[newGroup] + 1
+                    groupCounts[currentGroup] = groupCounts[currentGroup] - 1
+                    break
+                end
+            end
+        end
+    end
+
+    PrintMissingPlayers(boss)
 end
 
 -- Helper function: Splits a string by a delimiter
@@ -111,18 +177,42 @@ local function SplitString(input, delimiter)
     return result
 end
 
--- Helper function: Update Boss Buttons
+-- Function to update boss buttons
 local function UpdateBossButtons()
     for _, child in ipairs({BossGroupManager:GetChildren()}) do
-        if child:GetName() ~= "BossGroupManagerTitle" then
+        if child:GetName() ~= "BossGroupManagerTitle" and child:GetName() ~= nil and not child:GetName():find("TitleIcon") then
             child:Hide() -- Hide old buttons
+        end
+    end
+
+    -- Function to invite missing players
+    local function InviteMissingPlayers(boss)
+        local assignedPlayers = playersByBoss[boss]
+        if not assignedPlayers then
+            customPrint("No Setup for " .. boss, "err")
+            return
+        end
+        DevTool:AddData(assignedPlayers)
+        for _, player in ipairs(assignedPlayers) do
+            local playerName = player:match("^%s*(.-)%s*$") -- Trim spaces
+            local found = false
+            for i = 1, GetNumGroupMembers() do
+                local unitName = GetRaidRosterInfo(i)
+                if unitName == playerName then
+                    found = true
+                    break
+                end
+            end
+            if not found then
+                C_PartyInfo.InviteUnit(playerName) -- Using C_PartyInfo.InviteUnit to invite the player
+            end
         end
     end
 
     local buttonWidth = 120
     local buttonHeight = 30
-    local xOffset = 10
-    local yOffset = -40 -- Start below the title
+    local xOffset = 10 -- Adjusted offset for centering
+    local yOffset = -40 -- Start below the titleContainer
     local index = 0
 
     for _, boss in ipairs(bosses) do
@@ -131,24 +221,64 @@ local function UpdateBossButtons()
         button:SetText(boss)
         button:SetPoint("TOPLEFT", xOffset, yOffset + (-1 * (buttonHeight + 5) * index)) -- Adjust vertical spacing
         button:SetNormalFontObject("GameFontHighlight")
+
+        -- Create a texture and set it as the button's background
+        local normalTexture = button:CreateTexture()
+        normalTexture:SetAllPoints()
+        normalTexture:SetColorTexture(0.11, 0.11, 0.11, 1) -- RGB values for #1c1c1c
+        button:SetNormalTexture(normalTexture)
+
+        -- Create a texture for hover and set it as the highlight texture
+        local highlightTexture = button:CreateTexture()
+        highlightTexture:SetAllPoints()
+        highlightTexture:SetColorTexture(0.3, 0.3, 0.3, 1) -- Brighter shade for hover
+        button:SetHighlightTexture(highlightTexture)
+
         button:SetScript("OnClick", function()
             AssignPlayersToGroups(boss)
         end)
         button:Show()
+
+        -- Create an invite button
+        local inviteButton = CreateFrame("Button", "InviteButton" .. index, BossGroupManager, "UIPanelButtonTemplate")
+        inviteButton:SetSize(buttonHeight, buttonHeight) -- Match height of other buttons
+        inviteButton:SetPoint("LEFT", button, "RIGHT", 10, 0)
+        inviteButton:SetNormalFontObject("GameFontHighlight")
+
+        -- Set icon as the button's background
+        local inviteNormalTexture = inviteButton:CreateTexture()
+        inviteNormalTexture:SetAllPoints()
+        inviteNormalTexture:SetTexture("Interface\\Icons\\inv_letter_15") -- Mail icon path
+        inviteButton:SetNormalTexture(inviteNormalTexture)
+
+        -- Create a texture for hover and set it as the highlight texture
+        local inviteHighlightTexture = inviteButton:CreateTexture()
+        inviteHighlightTexture:SetAllPoints()
+        inviteHighlightTexture:SetColorTexture(0.3, 0.3, 0.3, 1) -- Brighter shade for hover
+        inviteButton:SetHighlightTexture(inviteHighlightTexture)
+
+        inviteButton:SetScript("OnClick", function()
+            InviteMissingPlayers(boss)
+        end)
+        inviteButton:Show()
+
         index = index + 1
     end
 
-    -- Adjust the frame's height dynamically based on the number of buttons
-    local baseHeight = 70 -- Title and padding
+    -- Adjust the main frame's height dynamically based on the number of buttons
+    local baseHeight = 40 -- Reduced base height to minimize excess space
     local totalHeight = baseHeight + (buttonHeight + 5) * index
     BossGroupManager:SetHeight(totalHeight)
+
+    -- Adjust the container frame's height to include the border
+    containerFrame:SetHeight(totalHeight + 20) -- Add extra space for border
 end
 
 -- Slash command: Import players for a boss
 local function ImportPlayers(input)
     local boss, players = input:match("^(.-);(.*)$")
     if not boss or not players then
-        print("Invalid format. Use: /bgm import [BossName];[Player1, Player2, Player3]")
+        print("Invalid format. Use: /Rilla import [BossName];[Player1, Player2, Player3]")
         return
     end
 
@@ -175,9 +305,24 @@ local function DeleteBoss(boss)
     end
 end
 
--- Slash command handling (same as before, no changes needed)
-SLASH_BGM1 = "/bgm"
-SlashCmdList["BGM"] = function(input)
+-- Register events and set up event handler
+BossGroupManager:SetScript("OnEvent", function(self, event, addonName)
+    if event == "ADDON_LOADED" and addonName == "RillaUI" then
+        if BossGroupManagerSaved == nil then
+            BossGroupManagerSaved = {}
+        end
+        playersByBoss = BossGroupManagerSaved.playersByBoss or {}
+        UpdateBossButtons()
+    elseif event == "PLAYER_LOGOUT" then
+        BossGroupManagerSaved.playersByBoss = playersByBoss
+    end
+end)
+BossGroupManager:RegisterEvent("ADDON_LOADED")
+BossGroupManager:RegisterEvent("PLAYER_LOGOUT")
+
+-- Slash command handling
+SLASH_RILLA1 = "/rilla"
+SlashCmdList["RILLA"] = function(input)
     if not input or input == "" then
         BossGroupManager:Show()
         return
@@ -188,91 +333,25 @@ SlashCmdList["BGM"] = function(input)
         ImportPlayers(data)
     elseif command == "delete" then
         DeleteBoss(data)
-    else
-        print("Unknown command. Use /bgm import [BossName];[Players] or /bgm delete [BossName]")
-    end
-end
-
--- Toggle visibility of Boss Group Manager window (same as before, no changes needed)
-SLASH_BGMT1 = "/bgmtoggle"
-SlashCmdList["BGMT"] = function()
-    if BossGroupManager:IsShown() then
-        BossGroupManager:Hide()
-    else
-        BossGroupManager:Show()
-    end
-end
-
--- Create a container frame for the entire UI
-local containerFrame = CreateFrame("Frame", "BossGroupManagerContainer", UIParent, "BackdropTemplate")
-containerFrame:SetSize(160, 70) -- Initial size (will be adjusted dynamically)
-containerFrame:SetPoint("CENTER")
-containerFrame:SetBackdrop({
-    bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
-    edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-    edgeSize = 16,
-    insets = {left = 4, right = 4, top = 4, bottom = 4},
-})
-containerFrame:SetBackdropColor(0, 0, 0, 0.3) -- Black background with 30% opacity
-containerFrame:SetBackdropBorderColor(0, 0, 0) -- Black border
-
--- Create the main frame inside the container
-local BossGroupManager = CreateFrame("Frame", "BossGroupManagerFrame", containerFrame)
-BossGroupManager:SetSize(150, 70) -- Initial size (will be adjusted dynamically)
-BossGroupManager:SetPoint("TOPLEFT", containerFrame, "TOPLEFT", 5, -5) -- Adjust position for border
-
--- Enable dragging for the container frame
-containerFrame:EnableMouse(true)
-containerFrame:SetMovable(true)
-containerFrame:RegisterForDrag("LeftButton")
-containerFrame:SetScript("OnDragStart", containerFrame.StartMoving)
-containerFrame:SetScript("OnDragStop", containerFrame.StopMovingOrSizing)
-
--- Title for the main frame
-local title = BossGroupManager:CreateFontString("BossGroupManagerTitle", "OVERLAY", "GameFontNormal")
-title:SetPoint("TOP", 0, -10)
-title:SetText("|cFFFFFFFFSetup Manager|r")
-title:SetFont("Fonts\\FRIZQT__.TTF", 16) -- Set font size to 14, no outline
-
--- Function to update boss buttons
-local function UpdateBossButtons()
-    for _, child in ipairs({BossGroupManager:GetChildren()}) do
-        if child:GetName() ~= "BossGroupManagerTitle" then
-            child:Hide() -- Hide old buttons
+    elseif command == "toggle" then
+        if BossGroupManager:IsShown() then
+            BossGroupManager:Hide()
+        else
+            BossGroupManager:Show()
         end
+    else
+        print("Unknown command. Use /rilla import [BossName];[Players], /rilla delete [BossName], or /rilla toggle")
     end
-
-    local buttonWidth = 120
-    local buttonHeight = 30
-    local xOffset = (BossGroupManager:GetWidth() - buttonWidth) / 2 -- Center the buttons
-    local yOffset = -40 -- Start below the title
-    local index = 0
-
-    for _, boss in ipairs(bosses) do
-        local button = CreateFrame("Button", "BossButton" .. index, BossGroupManager, "UIPanelButtonTemplate")
-        button:SetSize(buttonWidth, buttonHeight)
-        button:SetText(boss)
-        button:SetPoint("TOPLEFT", xOffset, yOffset + (-1 * (buttonHeight + 5) * index)) -- Adjust vertical spacing
-        button:SetNormalFontObject("GameFontHighlight")
-        button:SetScript("OnClick", function()
-            AssignPlayersToGroups(boss)
-        end)
-        button:Show()
-        index = index + 1
-    end
-
-    -- Adjust the main frame's height dynamically based on the number of buttons
-    local baseHeight = 40 -- Reduced base height to minimize excess space
-    local totalHeight = baseHeight + (buttonHeight + 5) * index
-    BossGroupManager:SetHeight(totalHeight)
-
-    -- Adjust the container frame's height to include the border
-    containerFrame:SetHeight(totalHeight + 20) -- Add extra space for border
 end
+
 
 -- Ensure UpdateBossButtons is called to initialize the buttons
 UpdateBossButtons()
 
-
-
-
+--[[
+TODO: 0.1. create icon(?)
+TODO: 0.2 add icon into wow
+TODO: 1. add minimap icon
+TODO: 2. add popup for longer string input (for all bosses)
+TODO: 3. change logic for string splitting to be able to add multiple boss setups at once like 'Ulgrax;Rilla,Dogma,TestChar,Rompschwanß,[...]:Horror;Rilla,Dogma,Böggels,Drill,[...],
+]]--
