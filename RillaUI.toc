@@ -6,10 +6,14 @@
 ## IconTexture: Interface\Addons\RillaUI\constantLogo.tga
 ## Dependencies: NorthernSkyMedia
 ## OptionalDependencies: Ace3, LibRealmInfo, LibDBIcon, LibDataBroker-1.1
-## SavedVariables: BossGroupManagerSaved, RillaUIDB
+## SavedVariables: BossGroupManagerSaved
+Functions.lua
+Utils.lua
+Frames.lua
 RillaUI.lua
+BossGroupManager.lua
+MiniMap.lua
 NSNickNamesElvUI.lua
 NSNickNamesCell.lua
 NSNickNamesGrid2.lua
 Bindings.lua
-BossGroupManager.lua
