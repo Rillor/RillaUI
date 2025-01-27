@@ -31,11 +31,6 @@ local BossGroupManager = CreateFrame("Frame", "BossGroupManagerFrame", container
 BossGroupManager:SetSize(260, 330) -- Adjusted size for the new layout
 BossGroupManager:SetPoint("TOPLEFT", containerFrame, "TOPLEFT", 10, -10) -- Adjust position for border
 
--- Create the main frame inside the container
-local BossGroupManager = CreateFrame("Frame", "BossGroupManagerFrame", containerFrame)
-BossGroupManager:SetSize(260, 330) -- Adjusted size for the new layout
-BossGroupManager:SetPoint("TOPLEFT", containerFrame, "TOPLEFT", 10, -10) -- Adjust position for border
-
 -- Container for the title and icon
 local titleContainer = CreateFrame("Frame", nil, BossGroupManager)
 titleContainer:SetSize(200, 40) -- Adjust size as needed
@@ -95,7 +90,7 @@ local function PrintMissingPlayers(boss)
         end
     end
     if #missingPlayers > 0 then
-        customPrint("\nPlayers missing from" .. boss .. "setup:|r\n" .. table.concat(missingPlayers, ", "), "err")
+        customPrint("\nPlayers missing from " .. boss .. " setup:|r\n" .. table.concat(missingPlayers, ", "), "err")
     else
         customPrint("All players are present for " .. boss .. " setup.|r", "success")
     end
@@ -306,7 +301,7 @@ local function DeleteBoss(boss)
 end
 
 -- Register events and set up event handler
-BossGroupManager:SetScript("OnEvent", function(self, event, addonName)
+BossGroupManager:SetScript("OnEvent", function(_, event, addonName)
     if event == "ADDON_LOADED" and addonName == "RillaUI" then
         if BossGroupManagerSaved == nil then
             BossGroupManagerSaved = {}
@@ -334,10 +329,10 @@ SlashCmdList["RILLA"] = function(input)
     elseif command == "delete" then
         DeleteBoss(data)
     elseif command == "toggle" then
-        if BossGroupManager:IsShown() then
-            BossGroupManager:Hide()
+        if containerFrame:IsShown() then
+            containerFrame:Hide()
         else
-            BossGroupManager:Show()
+            containerFrame:Show()
         end
     else
         print("Unknown command. Use /rilla import [BossName];[Players], /rilla delete [BossName], or /rilla toggle")
