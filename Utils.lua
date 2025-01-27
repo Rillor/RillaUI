@@ -3,9 +3,9 @@ local _, RillaUI = ...
 -- custom print by type in formatted String
 function RillaUI:customPrint(message, type)
     if type == "err" then
-        print("|cffee5555" .. message .. "|r")
+        print("|cffee5555RUI:\n" .. message .. "|r")
     elseif type == "success" then
-        print("|cff55ee55" .. message .. "|r")
+        print("|cff55ee55RUI:\n" .. message .. "|r")
     end
 end
 

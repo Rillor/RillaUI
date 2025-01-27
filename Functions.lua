@@ -1,9 +1,19 @@
 local _, RillaUI = ...
 
--- open dialog for string Import
-function RillaUI:Dialog()
-
+-- Initialize playersByBoss
+if not playersByBoss then
+    playersByBoss = {}
 end
+
+-- open importDialog
+function RillaUI:toggleImportDialog()
+    if RillaUI.ImportDialog:IsShown() then
+        RillaUI.ImportDialog:Hide()
+    else
+        RillaUI.ImportDialog:Show()
+    end
+end
+
 -- Function to print players missing from a specific boss setup
 function RillaUI:EvaluateMissingPlayers(boss)
     if not playersByBoss[boss] then
@@ -26,7 +36,7 @@ function RillaUI:EvaluateMissingPlayers(boss)
         end
     end
     if #missingPlayers > 0 then
-        RillaUI:customPrint("\nPlayers missing from " .. boss .. " setup:|r\n" .. table.concat(missingPlayers, ", "), "err")
+        RillaUI:customPrint("Players missing from " .. boss .. " setup:|r\n" .. table.concat(missingPlayers, ", "), "err")
     else
         RillaUI:customPrint("All players are present for " .. boss .. " setup.|r", "success")
     end
@@ -118,7 +128,7 @@ function RillaUI:AssignPlayersToGroups(boss)
             end
         end
     end
-
+    RillaUI:customPrint("Applied Setup for: " .. boss, "success")
     RillaUI:EvaluateMissingPlayers(boss)
 end
 
@@ -136,7 +146,7 @@ function RillaUI:UpdateBossButtons()
     local yOffset = -40 -- Start below the titleContainer
     local index = 0
 
-    for _, boss in ipairs(bosses) do
+    for _, boss in ipairs(RillaUI.bosses) do
         local button = CreateFrame("Button", "BossButton" .. index, RillaUI.BossGroupManager, "UIPanelButtonTemplate")
         button:SetSize(buttonWidth, buttonHeight)
         button:SetText(boss)
@@ -193,4 +203,54 @@ function RillaUI:UpdateBossButtons()
 
     -- Adjust the container frame's height to include the border
     RillaUI.setupManager:SetHeight(totalHeight + 20) -- Add extra space for border
+end
+
+-- Function to import multiple bosses and their players
+function RillaUI:importBosses(bossString)
+    local playersByBoss = {}
+    local bossNames = {}
+
+    for boss in bossString:gmatch("([^:]+)") do
+        local bossName, players = boss:match("([^;]+);(.+)")
+        if bossName and players then
+            local playerList = RillaUI:SplitString(players, ",")
+            for i, player in ipairs(playerList) do
+                playerList[i] = player:match("^%s*(.-)%s*$") -- Trim spaces from player names
+            end
+            playersByBoss[bossName] = playerList
+            table.insert(bossNames, bossName)
+        end
+    end
+
+    -- Update saved variable
+    BossGroupManagerSaved.playersByBoss = playersByBoss
+
+    -- Print imported setups for the bosses
+    RillaUI:customPrint("Imported setups for the following bosses:\n" .. table.concat(bossNames, ", "), "success")
+
+    -- Update the UI
+    RillaUI:UpdateBossButtons()
+end
+
+-- Slash command: Import players for multiple bosses
+function RillaUI:ImportPlayers(input)
+    if not input or input == "" then
+        RillaUI:customPrint("Invalid format. Use: /Rilla import Ulgrax;Player1,Player2:Boss2;Player3,Player4", "err")
+        return
+    end
+
+    -- Process the input string using the importBosses function
+    RillaUI:importBosses(input)
+end
+
+-- Slash command: Delete a boss
+function RillaUI:DeleteBoss(boss)
+    if playersByBoss[boss] then
+        playersByBoss[boss] = nil
+        BossGroupManagerSaved.playersByBoss = playersByBoss -- Update saved variable
+        RillaUI:customPrint("Deleted boss: " .. boss, "success")
+        RillaUI:UpdateBossButtons()
+    else
+        RillaUI.customPrint("Boss not found: " .. boss, "err")
+    end
 end
