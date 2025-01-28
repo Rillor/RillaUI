@@ -12,23 +12,23 @@ local setupManager = RillaUI.setupManager
 
 -- Create the main frame inside the container
 RillaUI.BossGroupManager = CreateFrame("Frame", "BossGroupManagerFrame", setupManager)
-RillaUI.BossGroupManager:SetSize(260, 330) -- Adjusted size for the new layout
+RillaUI.BossGroupManager:SetSize(180, 330) -- Adjusted size for the new layout
 RillaUI.BossGroupManager:SetPoint("TOPLEFT", setupManager, "TOPLEFT", 10, -10) -- Adjust position for border
 
 -- Container for the title and icon
 RillaUI.titleContainer = CreateFrame("Frame", nil, RillaUI.BossGroupManager)
-RillaUI.titleContainer:SetSize(200, 40) -- Adjust size as needed
+RillaUI.titleContainer:SetSize(160, 40) -- Adjust size as needed
 RillaUI.titleContainer:SetPoint("TOP", RillaUI.BossGroupManager, "TOP", 0, 0) -- Center the container and adjust position
 
 -- Icon to the left of the title
 local titleIcon = RillaUI.titleContainer:CreateTexture(nil, "OVERLAY")
 titleIcon:SetSize(32, 32) -- Adjust size as needed
 titleIcon:SetTexture("Interface\\AddOns\\RillaUI\\constantLogo.tga") -- Adjust path as needed
-titleIcon:SetPoint("LEFT")
+titleIcon:SetPoint("LEFT", 8, 0)
 
 -- Title for the main frame
 local title = RillaUI.titleContainer:CreateFontString("BossGroupManagerTitle", "OVERLAY", "GameFontNormal")
-title:SetPoint("LEFT", titleIcon, "RIGHT", 5, 0) -- Position title to the right of the icon
+title:SetPoint("LEFT", titleIcon, "RIGHT") -- Position title to the right of the icon
 title:SetText("|cFFFFFFFFSetup Manager|r")
 title:SetFont("Fonts\\FRIZQT__.TTF", 16) -- Set font size to 14, no outline
 
@@ -39,6 +39,7 @@ RillaUI.BossGroupManager:SetScript("OnEvent", function(_, event, addonName)
             BossGroupManagerSaved = {}
         end
         playersByBoss = BossGroupManagerSaved.playersByBoss or {}
+        DevTool:AddData(BossGroupManagerSaved)
         RillaUI:UpdateBossButtons()
     elseif event == "PLAYER_LOGOUT" then
         BossGroupManagerSaved.playersByBoss = playersByBoss
@@ -74,6 +75,6 @@ RillaUI:UpdateBossButtons()
 
 --[[
 
-TODO:    ❌ implement slot preserveation IF slotInfo has been set with function
+TODO:    ❌ implement slot preserveation IF slotInfo has been set with function -> table in each boss
 TODO:    ❌ Add NorthernSky Nicknames (NS:API) to filtering and look for matches in currentGroup
 ]]--
