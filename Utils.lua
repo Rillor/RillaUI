@@ -2,10 +2,13 @@ local _, RillaUI = ...
 
 -- custom print by type in formatted String
 function RillaUI:customPrint(message, type)
+    local printHeader = "==== Rilla's Setup Manager ===="
     if type == "err" then
-        print("|cffee5555RUI:\n" .. message .. "|r")
+        print(printHeader)
+        print("|cffee5555" .. message .. "|r")
     elseif type == "success" then
-        print("|cff55ee55RUI:\n" .. message .. "|r")
+        print(printHeader)
+        print("|cff55ee55" .. message .. "|r")
     end
 end
 
@@ -21,11 +24,14 @@ function RillaUI:GetClassColor(player)
     return player -- Default to white if not found
 end
 
--- Splits a string by a delimiter
-function RillaUI:SplitString(input, delimiter)
-    local result = {}
-    for match in (input .. delimiter):gmatch("(.-)" .. delimiter) do
-        table.insert(result, match:match("^%s*(.-)%s*$")) -- Trim spaces
+function RillaUI:DevTool(variable, name)
+    DevTool:AddData(variable, name)
+end
+
+function RillaUI:tableLength(table)
+    local count = 0
+    for _ in pairs(table) do
+        count = count + 1
     end
-    return result
+    return count
 end

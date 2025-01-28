@@ -4,7 +4,7 @@ local _, RillaUI = ...
 -- Setup Manager Frame Creation
 -- Create a container frame for the entire UI
 RillaUI.setupManager = CreateFrame("Frame", "BossGroupManagerContainer", UIParent, "BackdropTemplate")
-RillaUI.setupManager:SetSize(220, 350) -- Adjusted size for better fit
+RillaUI.setupManager:SetSize(200, 350) -- Adjusted size for better fit
 RillaUI.setupManager:SetPoint("CENTER")
 RillaUI.setupManager:SetBackdrop({ bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border", edgeSize = 16, insets = { left = 4, right = 4, top = 4, bottom = 4 }, })
 RillaUI.setupManager:SetBackdropColor(0, 0, 0, 0.8) -- Black background with 30% opacity

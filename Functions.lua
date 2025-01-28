@@ -1,10 +1,5 @@
 local _, RillaUI = ...
 
--- Initialize playersByBoss
-if not playersByBoss then
-    playersByBoss = {}
-end
-
 -- open importDialog
 function RillaUI:toggleImportDialog()
     if RillaUI.ImportDialog:IsShown() then
@@ -16,31 +11,43 @@ end
 
 -- Function to print players missing from a specific boss setup
 function RillaUI:EvaluateMissingPlayers(boss)
+    DevTool:AddData(playersByBoss[boss], "playersByBoss[boss]")
     if not playersByBoss[boss] then
+        print("early cancel due to playersByBoss[boss] being not set")
         return
     end
 
     local missingPlayers = {}
-    for _, player in ipairs(playersByBoss[boss]) do
-        player = player:match("^%s*(.-)%s*$") -- Trim spaces
-        local found = false
-        for i = 1, GetNumGroupMembers() do
-            local unitName = GetRaidRosterInfo(i)
-            if unitName == player then
-                found = true
-                break
+    for _, playerName in ipairs(playersByBoss[boss]) do
+        if playerName then
+            DevTool:AddData(playerName, "playerName")
+            local player = playerName:match("^%s*(.-)%s*$") -- Trim spaces
+            DevTool:AddData(player, "player")
+            local found = false
+            for i = 1, GetNumGroupMembers() do
+                local unitName = GetRaidRosterInfo(i)
+                DevTool:AddData(unitName, "unitName")
+                if unitName == player then
+                    DevTool:AddData(player, "found")
+                    found = true
+                    break
+                end
             end
-        end
-        if not found then
-            table.insert(missingPlayers, RillaUI:GetClassColor(player))
+            if not found then
+                DevTool:AddData(player, "not found")
+                table.insert(missingPlayers, RillaUI:GetClassColor(player))
+            end
         end
     end
     if #missingPlayers > 0 then
-        RillaUI:customPrint("Players missing from " .. boss .. " setup:|r\n" .. table.concat(missingPlayers, ", "), "err")
+        RillaUI:customPrint("Players missing from " .. boss .. " setup:", "err")
+        print(table.concat(missingPlayers, ", "))
     else
         RillaUI:customPrint("All players are present for " .. boss .. " setup.|r", "success")
     end
 end
+
+
 
 -- Function to invite missing players
 function RillaUI:InviteMissingPlayers(boss)
@@ -49,18 +56,20 @@ function RillaUI:InviteMissingPlayers(boss)
         RillaUI:customPrint("No Setup for " .. boss, "err")
         return
     end
-    for _, player in ipairs(assignedPlayers) do
-        local playerName = player:match("^%s*(.-)%s*$") -- Trim spaces
-        local found = false
-        for i = 1, GetNumGroupMembers() do
-            local unitName = GetRaidRosterInfo(i)
-            if unitName == playerName then
-                found = true
-                break
+    for _, playerName in ipairs(assignedPlayers) do
+        if playerName then
+            local player = playerName:match("^%s*(.-)%s*$") -- Trim spaces
+            local found = false
+            for i = 1, GetNumGroupMembers() do
+                local unitName = GetRaidRosterInfo(i)
+                if unitName == player then
+                    found = true
+                    break
+                end
             end
-        end
-        if not found then
-            C_PartyInfo.InviteUnit(playerName) -- Using C_PartyInfo.InviteUnit to invite the player
+            if not found then
+                C_PartyInfo.InviteUnit(player) -- Using C_PartyInfo.InviteUnit to invite the player
+            end
         end
     end
 end
@@ -73,6 +82,7 @@ function RillaUI:AssignPlayersToGroups(boss)
     end
 
     local players = playersByBoss[boss]
+    DevTool:AddData(playersByBoss, "playersByBoss")
     local maxGroupMembers = 5
 
     local raidMembers = {}
@@ -99,6 +109,26 @@ function RillaUI:AssignPlayersToGroups(boss)
         end
     end
 
+    -- Move assigned players to specified slots
+    for slot, player in ipairs(players) do
+        if player then
+            local targetGroup = math.ceil(slot / maxGroupMembers)
+            local targetSlot = slot % maxGroupMembers
+            if targetSlot == 0 then
+                targetSlot = maxGroupMembers
+            end
+
+            if raidMembers[player] then
+                local currentGroup = raidMembers[player].group
+                if currentGroup ~= targetGroup then
+                    SetRaidSubgroup(raidMembers[player].index, targetGroup)
+                    groupCounts[targetGroup] = groupCounts[targetGroup] + 1
+                    groupCounts[currentGroup] = groupCounts[currentGroup] - 1
+                end
+            end
+        end
+    end
+
     -- Move unassigned players out of groups 1-4 to groups 5-8
     for unitName, index in pairs(unassignedPlayers) do
         local currentGroup = raidMembers[unitName].group
@@ -114,7 +144,7 @@ function RillaUI:AssignPlayersToGroups(boss)
         end
     end
 
-    -- Move assigned players to groups 1-4
+    -- Move remaining assigned players to groups 1-4
     for unitName, index in pairs(assignedPlayers) do
         local currentGroup = raidMembers[unitName].group
         if currentGroup > 4 then
@@ -128,9 +158,11 @@ function RillaUI:AssignPlayersToGroups(boss)
             end
         end
     end
-    RillaUI:customPrint("Applied Setup for: " .. boss, "success")
+
     RillaUI:EvaluateMissingPlayers(boss)
 end
+
+
 
 -- Function to update boss buttons
 function RillaUI:UpdateBossButtons()
@@ -139,6 +171,8 @@ function RillaUI:UpdateBossButtons()
             child:Hide() -- Hide old buttons
         end
     end
+
+    DevTool:AddData(playersByBoss, "bossData")
 
     local buttonWidth = 120
     local buttonHeight = 30
@@ -205,20 +239,27 @@ function RillaUI:UpdateBossButtons()
     RillaUI.setupManager:SetHeight(totalHeight + 20) -- Add extra space for border
 end
 
--- Function to import multiple bosses and their players
+-- Function to import bosses from and prepare boss-Table
 function RillaUI:importBosses(bossString)
-    local playersByBoss = {}
+    local bossesFromString = { strsplit(";", bossString) }
     local bossNames = {}
 
-    for boss in bossString:gmatch("([^:]+)") do
-        local bossName, players = boss:match("([^;]+);(.+)")
+    for _, boss in ipairs(bossesFromString) do
+        local bossName, players = strsplit(":", boss)
+        table.insert(bossNames, bossName)
+
         if bossName and players then
-            local playerList = RillaUI:SplitString(players, ",")
-            for i, player in ipairs(playerList) do
-                playerList[i] = player:match("^%s*(.-)%s*$") -- Trim spaces from player names
+            local playerList = {}
+            local slot = 1 -- Default slot for players without provided slots
+            for _, player in ipairs({ strsplit(",", players) }) do
+                local playerName, providedSlot = strsplit("+", player)
+                slot = tonumber(providedSlot) or slot
+                playerName = playerName:match("^%s*(.-)%s*$") -- Trim spaces
+                table.insert(playerList, slot, playerName)
+                slot = slot + 1 -- Increment the default slot for the next player
             end
+
             playersByBoss[bossName] = playerList
-            table.insert(bossNames, bossName)
         end
     end
 
@@ -226,7 +267,7 @@ function RillaUI:importBosses(bossString)
     BossGroupManagerSaved.playersByBoss = playersByBoss
 
     -- Print imported setups for the bosses
-    RillaUI:customPrint("Imported setups for the following bosses:\n" .. table.concat(bossNames, ", "), "success")
+    RillaUI:customPrint("Imported setups for the following bosses: " .. table.concat(bossNames, ", "), "success")
 
     -- Update the UI
     RillaUI:UpdateBossButtons()
