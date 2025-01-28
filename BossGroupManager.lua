@@ -39,6 +39,7 @@ RillaUI.BossGroupManager:SetScript("OnEvent", function(_, event, addonName)
             BossGroupManagerSaved = {}
         end
         playersByBoss = BossGroupManagerSaved.playersByBoss or {}
+        DevTool:AddData(BossGroupManagerSaved)
         RillaUI:UpdateBossButtons()
     elseif event == "PLAYER_LOGOUT" then
         BossGroupManagerSaved.playersByBoss = playersByBoss
