@@ -206,7 +206,7 @@ function RillaUI:AssignPlayersToGroups(boss)
 
     -- Move assigned players to specified slots within groups
     for group, slots in ipairs(groupLayout) do
-        for slot, player in ipairs(slots) do
+        for _, player in ipairs(slots) do
             if player and raidMembers[player] then
                 local currentGroup = raidMembers[player].group
                 if currentGroup ~= group then
@@ -459,7 +459,7 @@ function RillaUI:ReorderPlayersWithinGroups()
 
             -- Create a temporary table to hold the correct order
             local tempPositions = {}
-            for slot, player in ipairs(slots) do
+            for _, player in ipairs(slots) do
                 if player then
                     for _, pos in ipairs(currentPositions) do
                         if pos.name == player then
@@ -486,7 +486,7 @@ end
 -- Register the READY_CHECK event
 local eventFrame = CreateFrame("Frame")
 eventFrame:RegisterEvent("READY_CHECK")
-eventFrame:SetScript("OnEvent", function(self, event, ...)
+eventFrame:SetScript("OnEvent", function(_, event, ...)
     if event == "READY_CHECK" then
         RillaUI:ReorderPlayersWithinGroups()
     end
