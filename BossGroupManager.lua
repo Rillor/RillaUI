@@ -39,7 +39,6 @@ RillaUI.BossGroupManager:SetScript("OnEvent", function(_, event, addonName)
             BossGroupManagerSaved = {}
         end
         playersByBoss = BossGroupManagerSaved.playersByBoss or {}
-        DevTool:AddData(BossGroupManagerSaved)
         RillaUI:UpdateBossButtons()
     elseif event == "PLAYER_LOGOUT" then
         BossGroupManagerSaved.playersByBoss = playersByBoss
@@ -64,6 +63,8 @@ SlashCmdList["RILLA"] = function(input)
         end
     elseif command == "s" then
         RillaUI:toggleImportDialog()
+    elseif command == "clear" then
+        RillaUI:ClearBosses()
     else
         print("Unknown command. Use /rilla import [BossName];[Players], /rilla delete [BossName], or /rilla toggle")
     end
@@ -72,6 +73,7 @@ end
 
 -- Ensure UpdateBossButtons is called to initialize the buttons
 RillaUI:UpdateBossButtons()
+setupManager:Hide()
 
 --[[
 

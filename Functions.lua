@@ -11,7 +11,6 @@ end
 
 -- Function to print players missing from a specific boss setup
 function RillaUI:EvaluateMissingPlayers(boss)
-    DevTool:AddData(playersByBoss[boss], "playersByBoss[boss]")
     if not playersByBoss[boss] then
         print("early cancel due to playersByBoss[boss] being not set")
         return
@@ -20,21 +19,18 @@ function RillaUI:EvaluateMissingPlayers(boss)
     local missingPlayers = {}
     for _, playerName in ipairs(playersByBoss[boss]) do
         if playerName then
-            DevTool:AddData(playerName, "playerName")
             local player = playerName:match("^%s*(.-)%s*$") -- Trim spaces
-            DevTool:AddData(player, "player")
             local found = false
+
             for i = 1, GetNumGroupMembers() do
                 local unitName = GetRaidRosterInfo(i)
-                DevTool:AddData(unitName, "unitName")
+
                 if unitName == player then
-                    DevTool:AddData(player, "found")
                     found = true
                     break
                 end
             end
             if not found then
-                DevTool:AddData(player, "not found")
                 table.insert(missingPlayers, RillaUI:GetClassColor(player))
             end
         end
@@ -47,15 +43,35 @@ function RillaUI:EvaluateMissingPlayers(boss)
     end
 end
 
-
-
 -- Function to invite missing players
+local failedInvites = {} -- List to store players who couldn't be invited
+
+-- Function to handle system messages
+local function SystemMessageHandler(msg)
+    local playerName = msg:match("Cannot find player '([^']+)'") -- Adjust pattern to extract player name
+    if playerName then
+        table.insert(failedInvites, playerName)
+    end
+end
+
+
+-- Register for system messages
+local frame = CreateFrame("Frame")
+frame:RegisterEvent("CHAT_MSG_SYSTEM")
+frame:SetScript("OnEvent", function(_, event, ...)
+    if event == "CHAT_MSG_SYSTEM" then
+        local msg = ...
+        SystemMessageHandler(msg)
+    end
+end)
+
 function RillaUI:InviteMissingPlayers(boss)
     local assignedPlayers = playersByBoss[boss]
     if not assignedPlayers then
         RillaUI:customPrint("No Setup for " .. boss, "err")
         return
     end
+
     for _, playerName in ipairs(assignedPlayers) do
         if playerName then
             local player = playerName:match("^%s*(.-)%s*$") -- Trim spaces
@@ -72,18 +88,42 @@ function RillaUI:InviteMissingPlayers(boss)
             end
         end
     end
+
+    -- Check if the group needs to be converted to a raid
+    C_Timer.After(1, function()
+        if IsInGroup() and not IsInRaid() then
+            ConvertToRaid()
+            RillaUI:customPrint("Group converted to a raid.", "info")
+        end
+
+        -- Print the list of failed invites
+        if #failedInvites > 0 then
+            RillaUI:customPrint("Failed invites:", "err")
+            print(table.concat(failedInvites, ", "))
+            failedInvites = {}
+        end
+    end)
 end
 
--- Function to assign players to groups
+RillaUI.currentBoss = nil
+
 function RillaUI:AssignPlayersToGroups(boss)
+    if not playersByBoss then
+        RillaUI:customPrint("There have been not setups provided yet. Please copy sheet Input.", "err")
+        return
+    end
+
     if not playersByBoss[boss] then
         RillaUI:customPrint("No Setup for " .. boss, "err")
         return
     end
 
+    RillaUI.currentBoss = boss  -- Store the current boss identifier
+
     local players = playersByBoss[boss]
     DevTool:AddData(playersByBoss, "playersByBoss")
     local maxGroupMembers = 5
+    local totalGroups = 8
 
     local raidMembers = {}
     local unassignedPlayers = {}
@@ -91,13 +131,13 @@ function RillaUI:AssignPlayersToGroups(boss)
     local groupCounts = {}
 
     -- Initialize group counts
-    for i = 1, 8 do
+    for i = 1, totalGroups do
         groupCounts[i] = 0
     end
 
     -- Gather raid members and their current groups
     for i = 1, GetNumGroupMembers() do
-        local unitName, _, subgroup = GetRaidRosterInfo(i) -- Corrected parameter position
+        local unitName, _, subgroup = GetRaidRosterInfo(i)
         if subgroup and type(subgroup) == "number" then
             raidMembers[unitName] = { index = i, group = subgroup }
             groupCounts[subgroup] = groupCounts[subgroup] + 1
@@ -109,60 +149,87 @@ function RillaUI:AssignPlayersToGroups(boss)
         end
     end
 
-    -- Move assigned players to specified slots
-    for slot, player in ipairs(players) do
-        if player then
+    -- Move unassigned players out of groups 1-4 to groups 5-8
+    for unitName, index in pairs(unassignedPlayers) do
+        local currentGroup = raidMembers[unitName].group
+        if currentGroup <= 4 then
+            for newGroup = 5, totalGroups do
+                if groupCounts[newGroup] < maxGroupMembers then
+                    SetRaidSubgroup(index, newGroup)
+                    groupCounts[newGroup] = groupCounts[newGroup] + 1
+                    groupCounts[currentGroup] = groupCounts[currentGroup] - 1
+                    break
+                end
+            end
+        end
+    end
+
+    -- Create group layout for assigned players
+    local groupLayout = {}
+    for i = 1, totalGroups do
+        groupLayout[i] = {}
+    end
+
+    -- First, place players with specified slots
+    for _, player in ipairs(players) do
+        local slot = tonumber(player:match("%+(%d+)$")) -- Extract slot if specified
+
+        if slot then
             local targetGroup = math.ceil(slot / maxGroupMembers)
             local targetSlot = slot % maxGroupMembers
             if targetSlot == 0 then
                 targetSlot = maxGroupMembers
             end
 
-            if raidMembers[player] then
+            groupLayout[targetGroup][targetSlot] = player:match("^(.-)%+") -- Remove the slot from the player's name
+        end
+    end
+
+    -- Then, place players without specified slots
+    local nextSlot = 1
+    for _, player in ipairs(players) do
+        if not player:match("%+(%d+)$") then
+            while groupLayout[math.ceil(nextSlot / maxGroupMembers)][nextSlot % maxGroupMembers] do
+                nextSlot = nextSlot + 1
+            end
+
+            local targetGroup = math.ceil(nextSlot / maxGroupMembers)
+            local targetSlot = nextSlot % maxGroupMembers
+            if targetSlot == 0 then
+                targetSlot = maxGroupMembers
+            end
+
+            groupLayout[targetGroup][targetSlot] = player
+            nextSlot = nextSlot + 1
+        end
+    end
+
+    -- Move assigned players to specified slots within groups
+    for group, slots in ipairs(groupLayout) do
+        for slot, player in ipairs(slots) do
+            if player and raidMembers[player] then
                 local currentGroup = raidMembers[player].group
-                if currentGroup ~= targetGroup then
-                    SetRaidSubgroup(raidMembers[player].index, targetGroup)
-                    groupCounts[targetGroup] = groupCounts[targetGroup] + 1
+                if currentGroup ~= group then
+                    SetRaidSubgroup(raidMembers[player].index, group)
+                    groupCounts[group] = groupCounts[group] + 1
                     groupCounts[currentGroup] = groupCounts[currentGroup] - 1
+                end
+            else
+                for i = 1, GetNumGroupMembers() do
+                    local unitName = GetRaidRosterInfo(i)
+                    if unitName == player then
+                        SetRaidSubgroup(i, group)
+                        groupCounts[group] = groupCounts[group] + 1
+                        break
+                    end
                 end
             end
         end
     end
 
-    -- Move unassigned players out of groups 1-4 to groups 5-8
-    for unitName, index in pairs(unassignedPlayers) do
-        local currentGroup = raidMembers[unitName].group
-        if currentGroup <= 4 then
-            for newGroup = 5, 8 do
-                if groupCounts[newGroup] < maxGroupMembers then
-                    SetRaidSubgroup(index, newGroup)
-                    groupCounts[newGroup] = groupCounts[newGroup] + 1
-                    groupCounts[currentGroup] = groupCounts[currentGroup] - 1
-                    break
-                end
-            end
-        end
-    end
-
-    -- Move remaining assigned players to groups 1-4
-    for unitName, index in pairs(assignedPlayers) do
-        local currentGroup = raidMembers[unitName].group
-        if currentGroup > 4 then
-            for newGroup = 1, 4 do
-                if groupCounts[newGroup] < maxGroupMembers then
-                    SetRaidSubgroup(index, newGroup)
-                    groupCounts[newGroup] = groupCounts[newGroup] + 1
-                    groupCounts[currentGroup] = groupCounts[currentGroup] - 1
-                    break
-                end
-            end
-        end
-    end
-
+    RillaUI:customPrint("Applied Setup for: " .. boss, "success")
     RillaUI:EvaluateMissingPlayers(boss)
 end
-
-
 
 -- Function to update boss buttons
 function RillaUI:UpdateBossButtons()
@@ -171,8 +238,6 @@ function RillaUI:UpdateBossButtons()
             child:Hide() -- Hide old buttons
         end
     end
-
-    DevTool:AddData(playersByBoss, "bossData")
 
     local buttonWidth = 120
     local buttonHeight = 30
@@ -239,7 +304,10 @@ function RillaUI:UpdateBossButtons()
     RillaUI.setupManager:SetHeight(totalHeight + 20) -- Add extra space for border
 end
 
+
+-- Ulgrax:Rillasp+2,Rilladk+1,Fyfan,Rillaschwanß,Rillad+4
 -- Function to import bosses from and prepare boss-Table
+-- TOOD: Add fucntionality for split bullshit (kms)
 function RillaUI:importBosses(bossString)
     local bossesFromString = { strsplit(";", bossString) }
     local bossNames = {}
@@ -250,15 +318,35 @@ function RillaUI:importBosses(bossString)
 
         if bossName and players then
             local playerList = {}
-            local slot = 1 -- Default slot for players without provided slots
+            local usedSlots = {}
+            local nextSlot = 1
+            local playersWithoutSlots = {}
+
+            -- players with SlotInfo
             for _, player in ipairs({ strsplit(",", players) }) do
                 local playerName, providedSlot = strsplit("+", player)
-                slot = tonumber(providedSlot) or slot
                 playerName = playerName:match("^%s*(.-)%s*$") -- Trim spaces
-                table.insert(playerList, slot, playerName)
-                slot = slot + 1 -- Increment the default slot for the next player
+                local slot = tonumber(providedSlot)
+
+                if slot and not usedSlots[slot] then
+                    playerList[slot] = playerName
+                    usedSlots[slot] = true
+                else
+                    table.insert(playersWithoutSlots, playerName)
+                end
             end
 
+            -- players w/o slotIfo
+            for _, playerName in ipairs(playersWithoutSlots) do
+                while usedSlots[nextSlot] do
+                    nextSlot = nextSlot + 1
+                end
+                playerList[nextSlot] = playerName
+                usedSlots[nextSlot] = true
+                nextSlot = nextSlot + 1
+            end
+
+            RillaUI.setupManager:Show()
             playersByBoss[bossName] = playerList
         end
     end
@@ -267,7 +355,8 @@ function RillaUI:importBosses(bossString)
     BossGroupManagerSaved.playersByBoss = playersByBoss
 
     -- Print imported setups for the bosses
-    RillaUI:customPrint("Imported setups for the following bosses: " .. table.concat(bossNames, ", "), "success")
+    RillaUI:customPrint("Imported setups for the following bosses:", "success")
+    print(table.concat(bossNames, ", "))
 
     -- Update the UI
     RillaUI:UpdateBossButtons()
@@ -295,3 +384,119 @@ function RillaUI:DeleteBoss(boss)
         RillaUI.customPrint("Boss not found: " .. boss, "err")
     end
 end
+
+function RillaUI:ClearBosses()
+    if playersByBoss then
+        playersByBoss = nil
+        BossGroupManagerSaved.playersByBoss = nil
+        RillaUI:customPrint("Cleared all setups", "success")
+    end
+end
+
+-- Function to reorder players within their groups based on slots
+function RillaUI:ReorderPlayersWithinGroups()
+    local boss = RillaUI.currentBoss
+    if not boss or not playersByBoss[boss] then
+        RillaUI:customPrint("No Setup for current boss", "err")
+        return
+    end
+
+    local players = playersByBoss[boss]
+    local maxGroupMembers = 5
+    local totalGroups = 8
+
+    -- Create group layout for assigned players
+    local groupLayout = {}
+    for i = 1, totalGroups do
+        groupLayout[i] = {}
+    end
+
+    -- Place players with specified slots first
+    for _, player in ipairs(players) do
+        local slot = tonumber(player:match("%+(%d+)$")) -- Extract slot if specified
+
+        if slot then
+            local targetGroup = math.ceil(slot / maxGroupMembers)
+            local targetSlot = slot % maxGroupMembers
+            if targetSlot == 0 then
+                targetSlot = maxGroupMembers
+            end
+
+            groupLayout[targetGroup][targetSlot] = player:match("^(.-)%+") -- Remove the slot from the player's name
+        end
+    end
+
+    -- Place players without specified slots
+    local nextSlot = 1
+    for _, player in ipairs(players) do
+        if not player:match("%+(%d+)$") then
+            while groupLayout[math.ceil(nextSlot / maxGroupMembers)][nextSlot % maxGroupMembers] do
+                nextSlot = nextSlot + 1
+            end
+
+            local targetGroup = math.ceil(nextSlot / maxGroupMembers)
+            local targetSlot = nextSlot % maxGroupMembers
+            if targetSlot == 0 then
+                targetSlot = maxGroupMembers
+            end
+
+            groupLayout[targetGroup][targetSlot] = player
+            nextSlot = nextSlot + 1
+        end
+    end
+
+    -- Reorder players within their respective groups
+    for group, slots in ipairs(groupLayout) do
+        if group <= 4 then
+            -- Collect current positions of players in the group
+            local currentPositions = {}
+            for i = 1, GetNumGroupMembers() do
+                local unitName, _, subgroup, _, class = GetRaidRosterInfo(i)
+                if subgroup == group then
+                    table.insert(currentPositions, { name = unitName, index = i, class = class })
+                end
+            end
+
+            -- Create a temporary table to hold the correct order
+            local tempPositions = {}
+            for slot, player in ipairs(slots) do
+                if player then
+                    for _, pos in ipairs(currentPositions) do
+                        if pos.name == player then
+                            table.insert(tempPositions, pos)
+                            break
+                        end
+                    end
+                end
+            end
+
+            -- Move players within the group to match the correct order
+            for slot, pos in ipairs(tempPositions) do
+                if pos then
+                    SetRaidSubgroup(pos.index, group)
+                    RillaUI:customPrint("Moved " .. pos.name .. " to group " .. group .. " slot " .. slot, "info")
+                end
+            end
+        end
+    end
+
+    RillaUI:customPrint("Reordered players within groups 1-4 successfully.", "success")
+end
+
+-- Register the READY_CHECK event
+local eventFrame = CreateFrame("Frame")
+eventFrame:RegisterEvent("READY_CHECK")
+eventFrame:SetScript("OnEvent", function(self, event, ...)
+    if event == "READY_CHECK" then
+        RillaUI:ReorderPlayersWithinGroups()
+    end
+end)
+
+
+
+
+
+
+
+
+

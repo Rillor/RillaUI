@@ -24,10 +24,6 @@ function RillaUI:GetClassColor(player)
     return player -- Default to white if not found
 end
 
-function RillaUI:DevTool(variable, name)
-    DevTool:AddData(variable, name)
-end
-
 function RillaUI:tableLength(table)
     local count = 0
     for _ in pairs(table) do
