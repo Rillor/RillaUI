@@ -15,34 +15,56 @@ end
 -- Function to print players missing from a specific boss setup
 function RillaUI:EvaluateMissingPlayers(boss)
     if not playersByBoss[boss] then
-        print("early cancel due to playersByBoss[boss] being not set")
+        print("Early cancel: No setup found for boss '" .. boss .. "'")
         return
     end
+
+    unmodifiedfullCharList = NSAPI and NSAPI:GetAllCharacters() or {}
+    local fullCharList = {}
+    -- Normalize both keys and values in fullCharList
+    for characterName, canonicalName in pairs(unmodifiedfullCharList) do
+        local normalizedCharacterName = RillaUI:normalize(characterName)
+        local normalizedCanonicalName = RillaUI:normalize(canonicalName)
+        fullCharList[normalizedCharacterName] = normalizedCanonicalName
+    end
+
+    DevTool:AddData(fullCharList)
 
     local missingPlayers = {}
     for _, playerName in ipairs(playersByBoss[boss]) do
         if playerName then
             local player = playerName:match("^%s*(.-)%s*$") -- Trim spaces
+            local targetPlayer = RillaUI:normalize(player)
             local found = false
 
             for i = 1, GetNumGroupMembers() do
                 local unitName = GetRaidRosterInfo(i)
-
-                if unitName == player then
+                local normalizedUnitName = RillaUI:normalize(unitName)
+                DevTool:AddData(unitName, "unitName")
+                DevTool:AddData(normalizedUnitName, "normalizedUnitName")
+                -- Map the unit name to its canonical name (main character)
+                local canonicalName = fullCharList[normalizedUnitName] or normalizedUnitName
+                DevTool:AddData(fullCharList[normalizedUnitName], "normalizedUnitName in FCL")
+                DevTool:AddData(canonicalName, "canonicalName")
+                DevTool:AddData(targetPlayer, "targetPlayer")
+                -- Check if the canonical name matches the target player
+                if RillaUI:normalize(canonicalName) == targetPlayer then
                     found = true
                     break
                 end
             end
+
             if not found then
                 table.insert(missingPlayers, RillaUI:GetClassColor(player))
             end
         end
     end
+
     if #missingPlayers > 0 then
         RillaUI:customPrint("Players missing from " .. boss .. " setup:", "err")
         print(table.concat(missingPlayers, ", "))
     else
-        RillaUI:customPrint("Applied Setup for: " .. boss, "success")
+        RillaUI:customPrint("All assigned players (or their alts) are present for " .. boss .. ".", "success")
     end
 end
 
@@ -92,10 +114,7 @@ function RillaUI:InviteMissingPlayers(boss)
                 end
             end
             if not found then
-                RillaUI:customPrint("Inviting main player: " .. playerName, "info")
                 C_PartyInfo.InviteUnit(playerName)
-            else
-                RillaUI:customPrint("Player " .. playerName .. " is already in the group.", "info")
             end
         end
     end
@@ -119,7 +138,6 @@ function RillaUI:InviteMissingPlayers(boss)
 
                 local canonicalInfo = guildInfo[normalizedCanonical]
                 if canonicalInfo and canonicalInfo.online then
-                    RillaUI:customPrint("Inviting canonical " .. canonicalInfo.fullName .. " because they're online", "info")
                     C_PartyInfo.InviteUnit(canonicalInfo.fullName)
                 else
                     local altList = {}
@@ -141,7 +159,7 @@ function RillaUI:InviteMissingPlayers(boss)
                             end
                         end
                         if not invitedAny then
-                            RillaUI:customPrint("No online alts for  " .. canonical, "info")
+                            RillaUI:customPrint("No online alts for " .. canonical, "info")
                         end
                     else
                         -- TODO: proper logging when no info is found
@@ -156,7 +174,7 @@ function RillaUI:InviteMissingPlayers(boss)
 end
 
 RillaUI.currentBoss = nil
-
+-- TODO: assign alt to position of main in group-assignment
 function RillaUI:AssignPlayersToGroups(boss)
     if not playersByBoss then
         RillaUI:customPrint("There have been not setups provided yet. Please copy sheet Input.", "err")
@@ -171,7 +189,6 @@ function RillaUI:AssignPlayersToGroups(boss)
     RillaUI.currentBoss = boss  -- Store the current boss identifier
 
     local players = playersByBoss[boss]
-    DevTool:AddData(playersByBoss, "playersByBoss")
     local maxGroupMembers = 5
     local totalGroups = 8
 

@@ -7,6 +7,7 @@ RillaUI.MiniMapButton:SetWidth(32)
 RillaUI.MiniMapButton:SetHeight(32)
 RillaUI.MiniMapButton:SetFrameLevel(8)
 RillaUI.MiniMapButton:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
+RillaUI.MiniMapButton:RegisterForClicks("LeftButtonUp", "RightButtonUp")
 
 -- Position the button on the Minimap
 local function UpdatePosition()
@@ -20,7 +21,7 @@ RillaUI.MiniMapButton.angle = 45
 UpdatePosition()
 
 -- Make the button draggable
-RillaUI.MiniMapButton:RegisterForDrag("LeftButton")
+RillaUI.MiniMapButton:RegisterForDrag("LeftButton", "RightButton")
 RillaUI.MiniMapButton:SetScript("OnDragStart", function(self)
     self:StartMoving()
 end)
@@ -43,11 +44,7 @@ RillaUI.MiniMapButton:SetScript("OnClick", function(_, button)
     if button == "LeftButton" then
         RillaUI:toggleImportDialog()
     elseif button == "RightButton" then
-        if setupManager:IsShown() then
-            setupManager:Hide()
-        else
-            setupManager:Show()
-        end
+        RillaUI:toggleWindowVisibility()
     end
 end)
 

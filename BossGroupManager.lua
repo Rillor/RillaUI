@@ -47,6 +47,16 @@ end)
 RillaUI.BossGroupManager:RegisterEvent("ADDON_LOADED")
 RillaUI.BossGroupManager:RegisterEvent("PLAYER_LOGOUT")
 
+function RillaUI:toggleWindowVisibility()
+    if setupManager:IsShown() then
+        setupManager:Hide()
+    else
+        setupManager:Show()
+    end
+end
+
+
+
 -- Slash command handling
 SLASH_RILLA1 = "/rilla"
 SlashCmdList["RILLA"] = function(input)
@@ -56,11 +66,7 @@ SlashCmdList["RILLA"] = function(input)
     elseif command == "delete" then
         RillaUI:DeleteBoss(data)
     elseif command == "toggle" then
-        if setupManager:IsShown() then
-            setupManager:Hide()
-        else
-            setupManager:Show()
-        end
+        RillaUI:toggleWindowVisibility()
     elseif command == "s" then
         RillaUI:toggleImportDialog()
     elseif command == "clear" then
@@ -77,6 +83,6 @@ setupManager:Hide()
 
 --[[
 
-TODO:    ❌ implement slot preserveation IF slotInfo has been set with function -> table in each boss
+TODO:    ❌ implement slot preservation IF slotInfo has been set with function -> table in each boss
 TODO:    ❌ Add NorthernSky Nicknames (NS:API) to filtering and look for matches in currentGroup
 ]]--
