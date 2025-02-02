@@ -9,6 +9,8 @@ function RillaUI:customPrint(message, type)
     elseif type == "success" then
         print(printHeader)
         print("|cff55ee55" .. message .. "|r")
+    elseif tpye == "info" then
+        print("|cff00ffff".. message .."|r")
     end
 end
 
@@ -24,10 +26,36 @@ function RillaUI:GetClassColor(player)
     return player -- Default to white if not found
 end
 
+-- TOOD: check if this is still used
 function RillaUI:tableLength(table)
     local count = 0
     for _ in pairs(table) do
         count = count + 1
     end
     return count
+end
+
+-- Helper: normalize names (trim and lower-case)
+function RillaUI:normalize(name)
+    return (name and name:match("^%s*(.-)%s*$") or ""):lower()
+end
+
+-- Function to strip server name from a full player name
+function RillaUI:stripServer(name)
+    local baseName = name:match("^(.-)%-.+$") or name  -- Strip server if present
+    return RillaUI:normalize(baseName)
+end
+
+function RillaUI:getGuildInfo()
+    -- Build guildInfo table from the guild roster.
+    local guildInfo = {}
+    local numMembers = GetNumGuildMembers()
+    for i = 1, numMembers do
+        local fullName, _, _, _, _, _, _, _, online = GetGuildRosterInfo(i)
+        if fullName then
+            local nameWithoutServer = RillaUI:stripServer(fullName)
+            guildInfo[nameWithoutServer] = { online = online, fullName = fullName }
+        end
+    end
+    return guildInfo
 end
