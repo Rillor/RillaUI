@@ -1,5 +1,7 @@
 local _, RillaUI = ...
 
+
+
 -- open importDialog
 function RillaUI:toggleImportDialog()
     if RillaUI.ImportDialog:IsShown() then
@@ -9,6 +11,7 @@ function RillaUI:toggleImportDialog()
     end
 end
 
+-- TODO: add alts to evaluation
 -- Function to print players missing from a specific boss setup
 function RillaUI:EvaluateMissingPlayers(boss)
     if not playersByBoss[boss] then
@@ -39,7 +42,7 @@ function RillaUI:EvaluateMissingPlayers(boss)
         RillaUI:customPrint("Players missing from " .. boss .. " setup:", "err")
         print(table.concat(missingPlayers, ", "))
     else
-        RillaUI:customPrint("All players are present for " .. boss .. " setup.|r", "success")
+        RillaUI:customPrint("Applied Setup for: " .. boss, "success")
     end
 end
 
@@ -66,40 +69,87 @@ frame:SetScript("OnEvent", function(_, event, ...)
 end)
 
 function RillaUI:InviteMissingPlayers(boss)
+    local fullCharList = NSAPI and NSAPI:GetAllCharacters() or {}
+
     local assignedPlayers = playersByBoss[boss]
     if not assignedPlayers then
         RillaUI:customPrint("No Setup for " .. boss, "err")
         return
     end
+    failedInvites = failedInvites or {}
 
     for _, playerName in ipairs(assignedPlayers) do
         if playerName then
-            local player = playerName:match("^%s*(.-)%s*$") -- Trim spaces
+            local targetPlayer = RillaUI:normalize(playerName)
             local found = false
             for i = 1, GetNumGroupMembers() do
                 local unitName = GetRaidRosterInfo(i)
-                if unitName == player then
+                local strippedUnitName = RillaUI:stripServer(unitName)
+                local canonicalName = fullCharList[strippedUnitName] or strippedUnitName
+                if RillaUI:normalize(canonicalName) == targetPlayer then
                     found = true
                     break
                 end
             end
             if not found then
-                C_PartyInfo.InviteUnit(player) -- Using C_PartyInfo.InviteUnit to invite the player
+                RillaUI:customPrint("Inviting main player: " .. playerName, "info")
+                C_PartyInfo.InviteUnit(playerName)
+            else
+                RillaUI:customPrint("Player " .. playerName .. " is already in the group.", "info")
             end
         end
     end
 
-    -- Check if the group needs to be converted to a raid
     C_Timer.After(1, function()
         if IsInGroup() and not IsInRaid() then
             ConvertToRaid()
             RillaUI:customPrint("Group converted to a raid.", "info")
         end
 
-        -- Print the list of failed invites
         if #failedInvites > 0 then
             RillaUI:customPrint("Failed invites:", "err")
             print(table.concat(failedInvites, ", "))
+
+            local guildInfo = RillaUI:getGuildInfo() or {}
+
+            for _, failedName in ipairs(failedInvites) do
+                -- Determine the canonical name: if failedName is an alt, get its canonical; else failedName
+                local canonical = fullCharList[failedName] or failedName
+                local normalizedCanonical = RillaUI:normalize(canonical)
+
+                local canonicalInfo = guildInfo[normalizedCanonical]
+                if canonicalInfo and canonicalInfo.online then
+                    RillaUI:customPrint("Inviting canonical " .. canonicalInfo.fullName .. " because they're online", "info")
+                    C_PartyInfo.InviteUnit(canonicalInfo.fullName)
+                else
+                    local altList = {}
+                    for characterName, mappedCanonical in pairs(fullCharList) do
+                        if RillaUI:normalize(mappedCanonical) == normalizedCanonical and RillaUI:normalize(characterName) ~= normalizedCanonical then
+                            table.insert(altList, characterName)
+                        end
+                    end
+
+                    if #altList > 0 then
+                        local invitedAny = false
+                        for _, altName in ipairs(altList) do
+                            local altKey = RillaUI:normalize(altName)
+                            local altInfo = guildInfo[altKey]
+                            if altInfo and altInfo.online then
+                                C_PartyInfo.InviteUnit(altInfo.fullName)
+                                invitedAny = true
+                                break
+                            end
+                        end
+                        if not invitedAny then
+                            RillaUI:customPrint("No online alts for  " .. canonical, "info")
+                        end
+                    else
+                        -- TODO: proper logging when no info is found
+                        RillaUI:customPrint("No alt data available for " .. failedName .. " (main: " .. canonical .. ")", "info")
+                    end
+                end
+            end
+
             failedInvites = {}
         end
     end)
@@ -227,7 +277,6 @@ function RillaUI:AssignPlayersToGroups(boss)
         end
     end
 
-    RillaUI:customPrint("Applied Setup for: " .. boss, "success")
     RillaUI:EvaluateMissingPlayers(boss)
 end
 
@@ -307,7 +356,7 @@ end
 
 -- Ulgrax:Rillasp+2,Rilladk+1,Fyfan,Rillaschwanß,Rillad+4
 -- Function to import bosses from and prepare boss-Table
--- TOOD: Add fucntionality for split bullshit (kms)
+-- TODO: Add functionality for split bullshit (kms)
 function RillaUI:importBosses(bossString)
     local bossesFromString = { strsplit(";", bossString) }
     local bossNames = {}
@@ -491,12 +540,3 @@ eventFrame:SetScript("OnEvent", function(_, event, ...)
         RillaUI:ReorderPlayersWithinGroups()
     end
 end)
-
-
-
-
-
-
-
-
-

@@ -41,8 +41,13 @@ icon:SetAllPoints(RillaUI.MiniMapButton)
 -- Set the click function for the button
 RillaUI.MiniMapButton:SetScript("OnClick", function(_, button)
     if button == "LeftButton" then
-        -- Execute the function when left-clicked
         RillaUI:toggleImportDialog()
+    elseif button == "RightButton" then
+        if setupManager:IsShown() then
+            setupManager:Hide()
+        else
+            setupManager:Show()
+        end
     end
 end)
 
