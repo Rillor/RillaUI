@@ -9,7 +9,7 @@ function RillaUI:customPrint(message, type)
     elseif type == "success" then
         print(printHeader)
         print("|cff55ee55" .. message .. "|r")
-    elseif tpye == "info" then
+    elseif type == "info" then
         print("|cff00ffff".. message .."|r")
     end
 end
@@ -26,7 +26,7 @@ function RillaUI:GetClassColor(player)
     return player -- Default to white if not found
 end
 
--- TOOD: check if this is still used
+-- TODO: check if this is still used
 function RillaUI:tableLength(table)
     local count = 0
     for _ in pairs(table) do

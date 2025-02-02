@@ -22,10 +22,10 @@ function RillaUI:EvaluateMissingPlayers(boss)
     unmodifiedfullCharList = NSAPI and NSAPI:GetAllCharacters() or {}
     local fullCharList = {}
     -- Normalize both keys and values in fullCharList
-    for characterName, canonicalName in pairs(unmodifiedfullCharList) do
+    for characterName, mainCharacter in pairs(unmodifiedfullCharList) do
         local normalizedCharacterName = RillaUI:normalize(characterName)
-        local normalizedCanonicalName = RillaUI:normalize(canonicalName)
-        fullCharList[normalizedCharacterName] = normalizedCanonicalName
+        local normalizedMainName = RillaUI:normalize(mainCharacter)
+        fullCharList[normalizedCharacterName] = normalizedMainName
     end
 
     DevTool:AddData(fullCharList)
@@ -40,15 +40,10 @@ function RillaUI:EvaluateMissingPlayers(boss)
             for i = 1, GetNumGroupMembers() do
                 local unitName = GetRaidRosterInfo(i)
                 local normalizedUnitName = RillaUI:normalize(unitName)
-                DevTool:AddData(unitName, "unitName")
-                DevTool:AddData(normalizedUnitName, "normalizedUnitName")
-                -- Map the unit name to its canonical name (main character)
-                local canonicalName = fullCharList[normalizedUnitName] or normalizedUnitName
-                DevTool:AddData(fullCharList[normalizedUnitName], "normalizedUnitName in FCL")
-                DevTool:AddData(canonicalName, "canonicalName")
-                DevTool:AddData(targetPlayer, "targetPlayer")
-                -- Check if the canonical name matches the target player
-                if RillaUI:normalize(canonicalName) == targetPlayer then
+                -- Map the unit name to its main character
+                local mainCharacter = fullCharList[normalizedUnitName] or normalizedUnitName
+                -- Check if the main name matches the target player
+                if RillaUI:normalize(mainCharacter) == targetPlayer then
                     found = true
                     break
                 end
@@ -107,8 +102,8 @@ function RillaUI:InviteMissingPlayers(boss)
             for i = 1, GetNumGroupMembers() do
                 local unitName = GetRaidRosterInfo(i)
                 local strippedUnitName = RillaUI:stripServer(unitName)
-                local canonicalName = fullCharList[strippedUnitName] or strippedUnitName
-                if RillaUI:normalize(canonicalName) == targetPlayer then
+                local mainName = fullCharList[strippedUnitName] or strippedUnitName
+                if RillaUI:normalize(mainName) == targetPlayer then
                     found = true
                     break
                 end
@@ -132,17 +127,17 @@ function RillaUI:InviteMissingPlayers(boss)
             local guildInfo = RillaUI:getGuildInfo() or {}
 
             for _, failedName in ipairs(failedInvites) do
-                -- Determine the canonical name: if failedName is an alt, get its canonical; else failedName
-                local canonical = fullCharList[failedName] or failedName
-                local normalizedCanonical = RillaUI:normalize(canonical)
+                -- Determine the main name: if failedName is an alt, get its main; else failedName
+                local mainCharacter = fullCharList[failedName] or failedName
+                local normalizedMain = RillaUI:normalize(mainCharacter)
 
-                local canonicalInfo = guildInfo[normalizedCanonical]
-                if canonicalInfo and canonicalInfo.online then
-                    C_PartyInfo.InviteUnit(canonicalInfo.fullName)
+                local mainInfo = guildInfo[normalizedMain]
+                if mainInfo and mainInfo.online then
+                    C_PartyInfo.InviteUnit(mainInfo.fullName)
                 else
                     local altList = {}
-                    for characterName, mappedCanonical in pairs(fullCharList) do
-                        if RillaUI:normalize(mappedCanonical) == normalizedCanonical and RillaUI:normalize(characterName) ~= normalizedCanonical then
+                    for characterName, mappedMain in pairs(fullCharList) do
+                        if RillaUI:normalize(mappedMain) == normalizedMain and RillaUI:normalize(characterName) ~= normalizedMain then
                             table.insert(altList, characterName)
                         end
                     end
@@ -159,11 +154,11 @@ function RillaUI:InviteMissingPlayers(boss)
                             end
                         end
                         if not invitedAny then
-                            RillaUI:customPrint("No online alts for " .. canonical, "info")
+                            RillaUI:customPrint("No online alts for " .. mainCharacter, "info")
                         end
                     else
                         -- TODO: proper logging when no info is found
-                        RillaUI:customPrint("No alt data available for " .. failedName .. " (main: " .. canonical .. ")", "info")
+                        RillaUI:customPrint("No alt data available for " .. failedName .. " (main: " .. mainCharacter .. ")", "info")
                     end
                 end
             end
