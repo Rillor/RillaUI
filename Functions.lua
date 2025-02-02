@@ -28,8 +28,6 @@ function RillaUI:EvaluateMissingPlayers(boss)
         fullCharList[normalizedCharacterName] = normalizedMainName
     end
 
-    DevTool:AddData(fullCharList)
-
     local missingPlayers = {}
     for _, playerName in ipairs(playersByBoss[boss]) do
         if playerName then
