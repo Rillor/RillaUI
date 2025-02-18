@@ -1,6 +1,6 @@
 local _, RillaUI = ...
 
-
+-- build function to verify majority is from guild (either NS aura_env or hardcode)
 
 -- open importDialog
 function RillaUI:toggleImportDialog()
@@ -19,7 +19,7 @@ function RillaUI:EvaluateMissingPlayers(boss)
         return
     end
 
-    unmodifiedfullCharList = NSAPI and NSAPI:GetAllCharacters() or {}
+    unmodifiedfullCharList = NSAPI and NSAPI:GetAllCharacters() or {} -- need to do this in assign too
     local fullCharList = {}
     -- Normalize both keys and values in fullCharList
     for characterName, mainCharacter in pairs(unmodifiedfullCharList) do
@@ -63,6 +63,10 @@ end
 
 -- Function to invite missing players
 local failedInvites = {} -- List to store players who couldn't be invited
+-- TOOD: api limitation read (check what kind of message it is)
+-- check for api limitation call and then pass call again after a while (check if api limit is exposed to be checkable)
+-- ^- pass playersByBoss[boss]
+
 
 -- Function to handle system messages
 local function SystemMessageHandler(msg)
@@ -124,6 +128,8 @@ function RillaUI:InviteMissingPlayers(boss)
 
             local guildInfo = RillaUI:getGuildInfo() or {}
 
+
+            -- TOOD: check how the fuck a "your party is full error can return even though raid group has 15 spots left ????
             for _, failedName in ipairs(failedInvites) do
                 -- Determine the main name: if failedName is an alt, get its main; else failedName
                 local mainCharacter = fullCharList[failedName] or failedName
@@ -169,6 +175,12 @@ end
 RillaUI.currentBoss = nil
 -- TODO: assign alt to position of main in group-assignment
 function RillaUI:AssignPlayersToGroups(boss)
+
+    -- safety check established VMRT as data source
+    -- Dependencies: MRT
+    -- add alts from NSAPI:GetAllCharacters()
+    -- safety notInCombat()
+
     if not playersByBoss then
         RillaUI:customPrint("There have been not setups provided yet. Please copy sheet Input.", "err")
         return
@@ -178,6 +190,8 @@ function RillaUI:AssignPlayersToGroups(boss)
         RillaUI:customPrint("No Setup for " .. boss, "err")
         return
     end
+
+
 
     RillaUI.currentBoss = boss  -- Store the current boss identifier
 
@@ -194,7 +208,6 @@ function RillaUI:AssignPlayersToGroups(boss)
     for i = 1, totalGroups do
         groupCounts[i] = 0
     end
-
     -- Gather raid members and their current groups
     for i = 1, GetNumGroupMembers() do
         local unitName, _, subgroup = GetRaidRosterInfo(i)
@@ -265,6 +278,7 @@ function RillaUI:AssignPlayersToGroups(boss)
     end
 
     -- Move assigned players to specified slots within groups
+    -- work in batches if possible (delay them by x(time) to avoid api limitation
     for group, slots in ipairs(groupLayout) do
         for _, player in ipairs(slots) do
             if player and raidMembers[player] then
@@ -290,6 +304,8 @@ function RillaUI:AssignPlayersToGroups(boss)
     RillaUI:EvaluateMissingPlayers(boss)
 end
 
+
+-- move to own lua file
 -- Function to update boss buttons
 function RillaUI:UpdateBossButtons()
     for _, child in ipairs({ RillaUI.BossGroupManager:GetChildren() }) do
@@ -362,7 +378,6 @@ function RillaUI:UpdateBossButtons()
     -- Adjust the container frame's height to include the border
     RillaUI.setupManager:SetHeight(totalHeight + 20) -- Add extra space for border
 end
-
 
 -- Ulgrax:Rillasp+2,Rilladk+1,Fyfan,Rillaschwanß,Rillad+4
 -- Function to import bosses from and prepare boss-Table
@@ -531,7 +546,7 @@ function RillaUI:ReorderPlayersWithinGroups()
 
             -- Move players within the group to match the correct order
             for slot, pos in ipairs(tempPositions) do
-                if pos then
+                if pos and currentPositions[player].index ~= tempPositions[playersByBoss].index then
                     SetRaidSubgroup(pos.index, group)
                     RillaUI:customPrint("Moved " .. pos.name .. " to group " .. group .. " slot " .. slot, "info")
                 end

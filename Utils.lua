@@ -16,14 +16,19 @@ end
 
 -- get ClassColorForPlayer
 function RillaUI:GetClassColor(player)
+    -- TOOD: get rid of this function
+    -- It'll only work for players who are known to the player (guild,raid, friendList) so default to white is afaik what has to be done
+
     for i = 1, GetNumGroupMembers() do
-        local unitName, _, _, _, classFileName = GetRaidRosterInfo(i)
+        local unitName = GetRaidRosterInfo(i)
         if unitName == player then
+            local _, classFileName = UnitClass(unitName)
             local color = RAID_CLASS_COLORS[classFileName]
+
             return format("|cff%02x%02x%02x%s|r", color.r * 255, color.g * 255, color.b * 255, player)
         end
     end
-    return player -- Default to white if not found
+    return player
 end
 
 -- TODO: check if this is still used
